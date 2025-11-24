@@ -1,0 +1,158 @@
+---
+title: "Proyecto"
+author: "Fabián Encarnación, Geoconda Molina"
+date: "2023-12-12"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(readxl)
+library(tidyverse)
+library(tsibble)
+library(fabletools)
+library(forecast)
+library(fpp3)
+
+
+```
+
+
+```{r}
+
+data <- read.csv('train.csv',sep = ";") 
+#ELEGIMOS STORE 13, Dept 1, YA QUE ES LA DE MAYOR SIZE 
+data13 <- data %>% filter(data$Store==13 & data$Dept==4)
+dataf <- read.csv('features.csv',sep = ";")
+dataf13 <- dataf %>% filter(dataf$Store==13)
+
+#View(data)
+
+#Variable dependiente
+yt <- data13 %>% mutate(Date=as.Date(Date,"%d/%m/%y"))%>% select(Date , Weekly_Sales)%>% as_tsibble(index=Date)
+autoplot(yt,.vars = Weekly_Sales)
+
+#Variable indep 1
+x1t <- dataf13 %>% mutate(Date=as.Date(Date,"%d/%m/%Y")) %>% select(Date,Temperature) %>% as_tsibble(index = Date)
+autoplot(x1t,.vars = Temperature)
+
+
+# Variable indep 2
+
+x2t <- dataf13 %>% mutate(Date=as.Date(Date,"%d/%m/%Y")) %>%select(Date,Fuel_Price)%>% as_tsibble(index = Date)
+
+autoplot(x2t,.vars=Fuel_Price)
+  
+
+# Variable indep 2
+
+x3t <- dataf13 %>% mutate(Date=as.Date(Date,"%d/%m/%Y"))%>% select(Date,CPI)%>% as_tsibble(index = Date)
+
+plot(x3t,type= "l")
+
+
+
+x4t <- dataf13 %>% mutate(Date=as.Date(Date,"%d/%m/%Y")) %>% select(Date,Unemployment)%>% as_tsibble(index = Date)
+plot(x4t,type='l')
+
+x5t <- dataf13 %>% mutate(Date=as.Date(Date,"%d/%m/%Y")) %>% select(Date,IsHoliday)%>% as_tsibble(index = Date)
+plot(x5t,type='l')
+fit <- x5t %>% model(TSLM(IsHoliday ~ trend()))
+report(fit)
+
+```
+
+## Variable Weekly_Sales 
+
+
+```{r}
+
+#Variable 1
+yt <- data13 %>% mutate(Date=as.Date(Date,"%d/%m/%Y"))%>% select(Date , Weekly_Sales)%>% as_tsibble(index=Date)
+
+autoplot(yt,.vars = Weekly_Sales)
+
+#PROBAR ESTACIONARIEDAD
+yt %>% features(Weekly_Sales,unitroot_kpss)
+#no es estacionaria, valor p menor 0.01
+yt %>% features(Weekly_Sales,unitroot_ndiffs)
+#se necesita una diferenciacion
+
+
+
+# 1) Ajustemos un modelo AR(p) a la serie de tiempo "ventas semanales"
+
+#View(data13)
+
+
+modelo_1 <- yt %>%
+  model(ARIMA(Weekly_Sales ~ pdq(2,0,0))) 
+
+
+report(modelo_1)
+gg_tsresiduals(modelo_1)
+
+
+
+
+# 2) Ajustemos un modelo ARMA(p,q) a la serie de tiempo "ventas semanales"
+
+modelo_2 <- yt %>%
+  model(ARIMA(Weekly_Sales ~ pdq(3,0,2))) 
+
+
+report(modelo_2)
+gg_tsresiduals(modelo_2)
+
+
+# 3) Ajustemos un modelo ARIMA(p,d,q) a la serie de tiempo "ventas semanales"
+
+
+modelo_3 <- yt %>%
+  model(ARIMA(Weekly_Sales ~ pdq(3,2,2))) 
+
+
+report(modelo_3)
+gg_tsresiduals(modelo_3)
+
+
+
+```
+
+## VARIABLE TEMPERATURA
+
+```{r}
+x1t <- dataf13 %>% mutate(Date=as.Date(Date,"%d/%m/%Y")) %>% select(Date,Temperature) %>% filter(Date<=as.Date("2012-10-26"))%>% as_tsibble(index = Date)
+autoplot(x1t,.vars = Temperature)
+
+x1t %>% features(Temperature,unitroot_kpss)
+
+acf(x1t)
+pacf(x1t) #ar 12
+
+##ajusto un ar(6)
+fit1 <- x1t %>% model(ARIMA(Temperature~pdq(6,0,0)))
+report(fit1)
+gg_tsresiduals(fit1)
+
+##sjuto arma(2,4)
+fit2 <- x1t %>% model(ARIMA(Temperature~pdq(2,0,2)))
+report(fit2)
+gg_tsresiduals(fit2)
+#ajusto AR(1)
+#ajusto el automatico 
+fit3 <- x1t %>% model(ARIMA(Temperature~pdq(1,0,0)))
+report(fit3)
+gg_tsresiduals(fit3)
+plot(fit3)
+
+
+#COMPARO LOS 3
+mod3 <- x1t %>% model(ar6=ARIMA(Temperature~pdq(6,0,0)),
+              arma24=ARIMA(Temperature~pdq(2,0,2)),
+              ar1=ARIMA(Temperature~pdq(1,0,0)))
+report(mod3)
+
+```
+
